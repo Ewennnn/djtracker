@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"sync"
 )
 
 type Service struct {
@@ -20,9 +19,7 @@ type Service struct {
 	reader        *bufio.Reader
 	liveTracklist chan string
 
-	mu      sync.RWMutex
-	clients map[int]chan *model.Track
-	nextId  int
+	trackBroadcaster *Broadcaster[*model.Track]
 }
 
 func New(log *slog.Logger, config *config.Config, repo *repository.Repository) *Service {
@@ -32,37 +29,13 @@ func New(log *slog.Logger, config *config.Config, repo *repository.Repository) *
 		repo:          repo,
 		liveTracklist: make(chan string, 1),
 
-		clients: make(map[int]chan *model.Track),
+		trackBroadcaster: NewBroadcaster[*model.Track](log),
 	}
 }
 
 // SubscribeForTracks Créer un nouveau channel abonné à la réception des tracks
 func (s *Service) SubscribeForTracks() (chan *model.Track, func()) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	channel := make(chan *model.Track, 1)
-
-	id := s.nextId
-	s.nextId++
-	s.clients[id] = channel
-
-	s.log.Info("Client just subscribed", "id", id)
-	return channel, func() {
-		s.unsubscribeForTracks(id)
-	}
-}
-
-// unsubscribeForTracks Désabonne et supprime un channel abonné à la réception des tracks
-func (s *Service) unsubscribeForTracks(id int) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if ch, ok := s.clients[id]; ok {
-		close(ch)
-		delete(s.clients, id)
-	}
-	s.log.Info("Client just unsubscribe", "id", id)
+	return s.trackBroadcaster.Subscribe(1)
 }
 
 func (s *Service) StartTracking() error {
@@ -94,18 +67,7 @@ func (s *Service) analyseTracks() {
 		}
 
 		s.repo.AddTrackToHistory(track)
-		s.broadcastTrack(track)
-	}
-}
-
-// broadcastTrack Diffuse à tous les clients abonnés lorsqu'une nouvelle track est diffusée
-func (s *Service) broadcastTrack(track *model.Track) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	s.log.Info("Receive track to broadcast to clients: " + track.Name)
-	for _, ch := range s.clients {
-		ch <- track
+		s.trackBroadcaster.Broadcast(track)
 	}
 }
 
