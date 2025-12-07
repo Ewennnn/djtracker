@@ -5,11 +5,13 @@ import (
 	"djtracker/internal/config"
 	"djtracker/internal/model"
 	"djtracker/internal/repository"
+	"djtracker/internal/utils"
 	"errors"
 	"io"
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 )
 
 type Service struct {
@@ -62,12 +64,20 @@ func (s *Service) StartTracking() error {
 // Transfer les informations de la TrackDTO vers le channel Tracks
 func (s *Service) analyseTracks() {
 	for trackText := range s.liveTracklist {
-		track := &model.TrackDTO{
-			Name: trackText,
+		parsedTrack, err := ParseLine(trackText)
+		if err != nil {
+			s.log.Error("Unable to parse track line", "track_line", trackText)
+			continue
+		}
+
+		track := &model.Track{
+			Artist: utils.SafeTrim(parsedTrack.Artist),
+			Name:   strings.TrimSpace(parsedTrack.Name),
+			PlayAt: time.Now(),
 		}
 
 		s.repo.AddTrackToHistory(track)
-		s.trackBroadcaster.Broadcast(track)
+		s.trackBroadcaster.Broadcast(track.ToDTO())
 	}
 }
 

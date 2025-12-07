@@ -54,7 +54,7 @@ func createTracksTable(db *sql.DB) error {
 		CREATE TABLE IF NOT EXISTS tracks (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			event_id INTEGER NOT NULL,
-			artist VARCHAR(255) NOT NULL,
+			artist VARCHAR(255),
 			name VARCHAR(255) NOT NULL,
 			play_at DATETIME NOT NULL,
 			

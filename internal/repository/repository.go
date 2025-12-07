@@ -74,7 +74,7 @@ func (r *Repository) createNewEvent(date time.Time) error {
 	return nil
 }
 
-func (r *Repository) AddTrackToHistory(track *model.TrackDTO) {
+func (r *Repository) AddTrackToHistory(track *model.Track) {
 	_, err := r.db.Exec(`
 		INSERT INTO tracks (event_id, artist, name, play_at) VALUES (?, ?, ?, ?)
 	`, r.event.ID, track.Artist, track.Name, track.PlayAt)
@@ -84,5 +84,4 @@ func (r *Repository) AddTrackToHistory(track *model.TrackDTO) {
 	} else {
 		r.log.Info("Track successfully saved", "event", r.event.ID, "track", fmt.Sprintf("%#v", track))
 	}
-
 }
