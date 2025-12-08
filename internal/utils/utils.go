@@ -2,7 +2,9 @@ package utils
 
 import (
 	"errors"
+	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"strings"
 )
@@ -27,4 +29,11 @@ func Exists(path string) bool {
 		return false
 	}
 	return false
+}
+
+func SafeDeferClose(file io.Closer, log *slog.Logger) {
+	err := file.Close()
+	if err != nil {
+		log.Error("Failed to close file", err)
+	}
 }

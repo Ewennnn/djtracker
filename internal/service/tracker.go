@@ -7,6 +7,7 @@ import (
 	"djtracker/internal/repository"
 	"djtracker/internal/utils"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -41,21 +42,21 @@ func (s *Service) SubscribeForTracks() (chan *model.TrackDTO, func()) {
 }
 
 func (s *Service) StartTracking() error {
-	file, err := os.Open(s.config.Tracker.History.Path)
+	tracklistFile, err := os.Open(s.config.Tracker.History.Path)
 	if err != nil {
 		return err
 	}
 
-	stat, err := file.Stat()
+	stat, err := tracklistFile.Stat()
 	if err != nil {
 		return err
 	}
-	_, err = file.Seek(stat.Size(), 0)
+	_, err = tracklistFile.Seek(stat.Size(), 0)
 	if err != nil {
 		return err
 	}
 
-	go s.readTracks(file)
+	go s.readTracks(tracklistFile)
 	go s.analyseTracks()
 	return nil
 }
@@ -76,16 +77,39 @@ func (s *Service) analyseTracks() {
 			PlayAt: time.Now(),
 		}
 
+		fileTrack, err := s.findTrackFile(track.Name)
+		if err != nil {
+			s.log.Error("Track file not found", "track", track.Name)
+		} else {
+			s.log.Debug("Track file found", "track", fileTrack)
+
+			trackDuration, err := s.findTrackDuration(fileTrack)
+			if err != nil {
+				s.log.Error("Failed to retrieve time data", "path", fileTrack.Path)
+			} else {
+				track.Duration = &trackDuration
+			}
+		}
+
 		s.repo.AddTrackToHistory(track)
 		s.trackBroadcaster.Broadcast(track.ToDTO())
 	}
+}
+
+func (s *Service) findTrackFile(track string) (*FileTrack, error) {
+	for _, sourceFolder := range s.config.Tracker.Source.Paths {
+		if file, err := FindFile(sourceFolder, track); err == nil {
+			return file, nil
+		}
+	}
+	return nil, fmt.Errorf("track file not found for %s", track)
 }
 
 // readTracks Lit le fichier tracklist de VirtualDJ
 // Transfer les informations brutes vers le channel liveTracklist
 func (s *Service) readTracks(file *os.File) {
 	reader := bufio.NewReader(file)
-	defer s.handleClose(file)
+	defer utils.SafeDeferClose(file, s.log)
 	for {
 		data, err := reader.ReadString('\n')
 		if err != nil {
@@ -97,12 +121,5 @@ func (s *Service) readTracks(file *os.File) {
 		data = strings.TrimRight(data, "\r\n")
 
 		s.liveTracklist <- data
-	}
-}
-
-func (s *Service) handleClose(file *os.File) {
-	err := file.Close()
-	if err != nil {
-		s.log.Error("Failed to close file", err)
 	}
 }
