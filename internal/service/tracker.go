@@ -83,7 +83,7 @@ func (s *Service) analyseTracks() {
 			s.log.Error("Track file not found", "track", track.Name)
 			s.repo.AddTrackToHistory(track.ToEntity())
 			s.trackBroadcaster.Broadcast(track.ToDTO())
-			return
+			continue
 		}
 		s.log.Debug("Track file found", "track", fileTrackData)
 		track.Path = &fileTrackData.Path
@@ -94,7 +94,7 @@ func (s *Service) analyseTracks() {
 			s.log.Error("Failed to open track file", "path", fileTrackData.Path)
 			s.repo.AddTrackToHistory(track.ToEntity())
 			s.trackBroadcaster.Broadcast(track.ToDTO())
-			return
+			continue
 		}
 
 		// Récupération de la durée de la track
